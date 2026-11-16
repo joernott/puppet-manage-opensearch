@@ -113,4 +113,49 @@ describe 'index providers' do
       expect(stub).to have_been_requested
     end
   end
+
+  describe 'opensearch_data_stream' do
+    let(:provider) { load_provider('opensearch_data_stream').new }
+    let(:streams) do
+      [
+        {
+          'name' => 'metrics', 'timestamp_field' => { 'name' => '@timestamp' }, 'indices' => [{ 'index_name' => '.ds-metrics-000003' }],
+          'generation' => 3, 'status' => 'GREEN', 'template' => 'metrics',
+        },
+        { 'name' => '.internal', 'generation' => 1, 'template' => 'internal' },
+      ]
+    end
+
+    before do
+      stub_request(:get, api_url('_data_stream')).to_return(json('data_streams' => streams))
+    end
+
+    it 'lists the data streams except those starting with a dot' do
+      expect(provider.get(context)).to eq(
+        [{ title: 'default/metrics', ensure: 'present', name: 'metrics', connection: 'default', template: 'metrics', generation: 3 }],
+      )
+    end
+
+    it 'treats a 404 as no data streams' do
+      stub_request(:get, api_url('_data_stream')).to_return(status: 404, body: '{}')
+      expect(provider.get(context)).to eq([])
+    end
+
+    it 'creates a data stream without a body' do
+      stub = stub_request(:put, api_url('_data_stream/logs')).with { |request| request.body.nil? || request.body.empty? }.to_return(json('acknowledged' => true))
+      provider.create(context, { name: 'logs', connection: 'default' }, { name: 'logs', ensure: 'present' })
+      expect(stub).to have_been_requested
+    end
+
+    it 'deletes a data stream' do
+      stub = stub_request(:delete, api_url('_data_stream/metrics')).to_return(json('acknowledged' => true))
+      provider.delete(context, { name: 'metrics', connection: 'default' })
+      expect(stub).to have_been_requested
+    end
+
+    it 'sends nothing on update' do
+      provider.update(context, { name: 'metrics', connection: 'default' }, { name: 'metrics', ensure: 'present' })
+      expect(a_request(:any, %r{_data_stream/})).not_to have_been_made
+    end
+  end
 end

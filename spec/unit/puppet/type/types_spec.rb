@@ -6,6 +6,7 @@ require 'puppet/resource_api'
 types = %w[
   opensearch_action_group opensearch_role opensearch_role_mapping
   opensearch_internal_user opensearch_index_template opensearch_ism_policy
+  opensearch_data_stream
 ]
 
 types.each do |type_name|

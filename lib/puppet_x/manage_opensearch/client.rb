@@ -27,7 +27,7 @@ module PuppetX
         if error.is_a?(Hash)
           [error['type'], error['reason']].compact.join(': ')
         else
-          (error || data['message'] || data['status'] || body).to_s
+          (error || data['reason'] || data['message'] || data['status'] || body).to_s
         end
       rescue JSON::ParserError
         body.to_s.strip

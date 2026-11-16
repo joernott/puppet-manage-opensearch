@@ -12,7 +12,7 @@ Based on [concept.md](concept.md). Status: agreed, decisions are recorded in sec
 - Types in 0.1.0: `opensearch_action_group`, `opensearch_role`,
   `opensearch_role_mapping`, `opensearch_internal_user`,
   `opensearch_index_template` (composable `_index_template`, not legacy
-  `_template`), `opensearch_ism_policy`.
+  `_template`), `opensearch_ism_policy`, `opensearch_data_stream`.
 - Structured facts under `opensearch.cluster.*`.
 - Not in 0.1.0: creating tokens for users (see decision 2).
 
@@ -106,6 +106,7 @@ must report zero changes.
 | `opensearch_internal_user` | `_plugins/_security/api/internalusers/{name}` | `password` (Sensitive) or `password_hash` (bcrypt), `backend_roles`, `opendistro_security_roles`, `attributes`, `description` | `password`/`password_hash` are used only when the user is created and are never compared afterwards (decision 3); `update` sends the existing user without a password, so it is kept; autorequire listed roles |
 | `opensearch_index_template` | `_index_template/{name}` | `index_patterns`, `template` (settings/mappings/aliases), `composed_of`, `priority`, `version`, `meta`, `data_stream` | the API returns settings nested under `index` with **stringified values** (`"1"` instead of `1`) → flatten and stringify both sides |
 | `opensearch_ism_policy` | `_plugins/_ism/policies/{id}` | `description`, `default_state`, `states`, `ism_template`, `error_notification` | updates need `?if_seq_no=…&if_primary_term=…` from the GET; strip server fields (`policy_id`, `last_updated_time`, `schema_version`, `seq_no`, …) |
+| `opensearch_data_stream` | `_data_stream/{name}` | none; `template` and `generation` read only | created from the matching template with `PUT` without body; nothing to update; `absent` deletes all backing indices; names starting with `.` are not listed; autorequire `opensearch_index_template[title]` |
 
 Example:
 
@@ -190,10 +191,10 @@ Test layers:
 4. **Facts**, with unit tests plus a check against the containers. *(done)*
 5. **Types**, one at a time with unit and integration tests each, from simplest
    to most complex: action_group → role → role_mapping → internal_user →
-   index_template → ism_policy. *(done)*
+   index_template → ism_policy → data_stream. *(done)*
 6. **Docs and release**: README with usage, `REFERENCE.md` via puppet-strings,
    `CHANGELOG.md`, tag `v0.1.0` (local only until tested in the target
-   network), `rake build` for the Forge tarball *(done)*.
+   network), `rake module:build` for the Forge tarball *(done)*.
 
 ## 7. Decisions (2026-11-16)
 

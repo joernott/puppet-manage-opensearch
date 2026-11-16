@@ -37,6 +37,11 @@ describe PuppetX::ManageOpensearch::Client do
     expect { client.put('r', {}) }.to raise_error(PuppetX::ManageOpensearch::ApiError, %r{Resource is reserved})
   end
 
+  it 'raises ApiError with the reason of a security plugin validation error' do
+    stub_request(:put, 'https://os.example.com:9200/u').to_return(status: 400, body: '{"status":"error","reason":"Weak password"}')
+    expect { client.put('u', {}) }.to raise_error(PuppetX::ManageOpensearch::ApiError, %r{HTTP 400: Weak password})
+  end
+
   it 'returns nil from get_if_exists on 404' do
     stub_request(:get, 'https://os.example.com:9200/missing').to_return(status: 404, body: '{}')
     expect(client.get_if_exists('missing')).to be_nil

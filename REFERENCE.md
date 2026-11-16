@@ -11,6 +11,7 @@
 ### Resource types
 
 * [`opensearch_action_group`](#opensearch_action_group): Manages an action group of the OpenSearch security plugin.
+* [`opensearch_data_stream`](#opensearch_data_stream): Manages a data stream.
 * [`opensearch_index_template`](#opensearch_index_template): Manages a composable index template (`_index_template`).
 * [`opensearch_internal_user`](#opensearch_internal_user): Manages a user of the OpenSearch security plugin's internal user database.
 * [`opensearch_ism_policy`](#opensearch_ism_policy): Manages an Index State Management (ISM) policy.
@@ -221,6 +222,84 @@ namevar
 Data type: `String[1]`
 
 The name of the action group.
+
+### <a name="opensearch_data_stream"></a>`opensearch_data_stream`
+
+Creating a data stream needs an index template with `data_stream` whose
+`index_patterns` match the name. The data stream automatically depends on
+an `opensearch_index_template` with the same name. An ISM policy whose
+`ism_template` matches the data stream name must exist before the data
+stream, so that it applies to the first backing index; add a `require`.
+
+Creating the data stream in advance means that the applications that
+write to it only need write permissions, not `indices:admin/create`.
+
+**`ensure => absent` deletes the data stream with all its backing indices
+and data.** So does purging with `resources`, for every data stream not in
+the catalog, including those that applications created themselves. Data
+streams whose name starts with a dot are not listed.
+
+The title is either the name or `connection/name`.
+
+#### Examples
+
+#####
+
+```puppet
+opensearch_data_stream { 'metrics':
+  require => Opensearch_ism_policy['metrics_daily'],
+}
+```
+
+#### Properties
+
+The following properties are available in the `opensearch_data_stream` type.
+
+##### `ensure`
+
+Data type: `Enum[present, absent]`
+
+Whether the data stream should exist. `absent` deletes all its data.
+
+Default value: `present`
+
+##### `generation`
+
+Data type: `Optional[Integer]`
+
+The number of the current backing index, i.e. rollovers + 1 (read only).
+
+##### `template`
+
+Data type: `Optional[String]`
+
+The index template the data stream was created from (read only).
+
+#### Parameters
+
+The following parameters are available in the `opensearch_data_stream` type.
+
+* [`connection`](#-opensearch_data_stream--connection)
+* [`name`](#-opensearch_data_stream--name)
+
+##### <a name="-opensearch_data_stream--connection"></a>`connection`
+
+namevar
+
+Data type: `Pattern[/\A[a-z0-9_]+\z/]`
+_*this data type contains a regex that may not be accurately reflected in generated documentation_
+
+The connection from the class manage_opensearch to use.
+
+Default value: `default`
+
+##### <a name="-opensearch_data_stream--name"></a>`name`
+
+namevar
+
+Data type: `String[1]`
+
+The name of the data stream.
 
 ### <a name="opensearch_index_template"></a>`opensearch_index_template`
 

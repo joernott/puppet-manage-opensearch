@@ -10,6 +10,7 @@ Manages objects inside an existing OpenSearch cluster through its REST API:
 | `opensearch_internal_user` | users of the internal user database |
 | `opensearch_index_template` | composable index templates (`_index_template`) |
 | `opensearch_ism_policy` | Index State Management policies |
+| `opensearch_data_stream` | data streams |
 
 It also provides the structured fact `opensearch`. Installing and configuring
 OpenSearch itself is left to other modules.
@@ -88,6 +89,7 @@ opensearch_ism_policy { 'logs_retention':
 ```
 
 All types can be listed with `puppet resource`, e.g. `puppet resource opensearch_role`.
+More examples with explanations are in [EXAMPLES.md](EXAMPLES.md).
 
 ### Behaviour worth knowing
 
@@ -108,6 +110,8 @@ All types can be listed with `puppet resource`, e.g. `puppet resource opensearch
   match in length and order. Removing a single key from a hash in the manifest
   is therefore not detected. Updating a policy does not change indices already
   managed by an older version of it.
+* **Deleting a data stream** (`ensure => absent`, or purging) deletes all its
+  backing indices and data.
 * **Several clusters:** further connections can be added with the class
   parameter `connections`. Address resources in them with titles like
   `'other/logs_reader'` or the `connection` parameter. Listing and purging

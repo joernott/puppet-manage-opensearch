@@ -39,13 +39,14 @@ normalize API responses before comparison.
 - `get` fetches the full collection in one call (e.g. `GET
   _plugins/_security/api/roles`). That gives `puppet resource opensearch_role`
   and `resources { 'opensearch_role': purge => true }` for free.
-- `create`/`update` use `PUT`, `delete` uses `DELETE`.
-- **Partial management:** the security API's `PUT` replaces the whole object.
-  To avoid wiping attributes the manifest doesn't set, `update` merges the
-  `should` state over the current `is` state before sending.
+- `create` uses `PUT`, `delete` uses `DELETE`.
+- **Partial management:** attributes the manifest doesn't set must survive an
+  update. Security objects are updated with `PATCH` operations for the managed
+  attributes only. Index templates and ISM policies only have `PUT`, so their
+  update sends the stored object with the managed attributes replaced.
 - **Reserved/static/hidden** entries (e.g. `all_access`, `kibana_user`) are
-  exposed read-only. `get` returns them with `reserved => true`. Changing them
-  fails with a clear error, and purging skips them.
+  left out of `get`. They can't be changed through the API anyway, and purging
+  then skips them. Declaring one fails with the API's "reserved" error.
 
 ### Connections and credentials
 Resources talk to a cluster through a named connection (parameter `connection`,
@@ -102,7 +103,7 @@ must report zero changes.
 | `opensearch_action_group` | `_plugins/_security/api/actiongroups/{name}` | `allowed_actions`, `type` (cluster/index/kibana), `description` | sort `allowed_actions` |
 | `opensearch_role` | `_plugins/_security/api/roles/{name}` | `cluster_permissions`, `index_permissions` (array of hashes: `index_patterns`, `allowed_actions`, `dls`, `fls`, `masked_fields`), `tenant_permissions`, `description` | treat permission arrays as sets and sort them; fill API defaults (`dls: ""`, `fls: []`, …) on the `should` side |
 | `opensearch_role_mapping` | `_plugins/_security/api/rolesmapping/{role}` | `backend_roles`, `and_backend_roles`, `hosts`, `users`, `description` | sort; autorequire `opensearch_role[title]` |
-| `opensearch_internal_user` | `_plugins/_security/api/internalusers/{name}` | `password` (Sensitive) or `hash` (bcrypt), `backend_roles`, `opendistro_security_roles`, `attributes`, `description` | `password`/`hash` are used only when the user is created and are never compared afterwards (decision 3); `update` sends the existing user without a password, so it is kept; autorequire listed roles |
+| `opensearch_internal_user` | `_plugins/_security/api/internalusers/{name}` | `password` (Sensitive) or `password_hash` (bcrypt), `backend_roles`, `opendistro_security_roles`, `attributes`, `description` | `password`/`password_hash` are used only when the user is created and are never compared afterwards (decision 3); `update` sends the existing user without a password, so it is kept; autorequire listed roles |
 | `opensearch_index_template` | `_index_template/{name}` | `index_patterns`, `template` (settings/mappings/aliases), `composed_of`, `priority`, `version`, `meta`, `data_stream` | the API returns settings nested under `index` with **stringified values** (`"1"` instead of `1`) → flatten and stringify both sides |
 | `opensearch_ism_policy` | `_plugins/_ism/policies/{id}` | `description`, `default_state`, `states`, `ism_template`, `error_notification` | updates need `?if_seq_no=…&if_primary_term=…` from the GET; strip server fields (`policy_id`, `last_updated_time`, `schema_version`, `seq_no`, …) |
 
@@ -148,7 +149,8 @@ Pushes to GitHub happen from the Windows repo with a dedicated deploy key
 Ruby is not installed on the VM. `scripts/ruby.sh` runs every command in an
 official `ruby:<version>` container as the calling user, with gems cached in a
 Docker volume per Ruby version. This needs no sudo and pins the Ruby version
-per OpenVox major: Ruby 3.2 for OpenVox 8, Ruby 3.4 for OpenVox 9.
+per OpenVox major, matching what the agent packages bundle: Ruby 3.2 for
+OpenVox 8, Ruby 4.0 for OpenVox 9.
 
 Tooling follows Vox Pupuli conventions, not PDK, because PDK is tied to
 Perforce Puppet:
@@ -161,18 +163,20 @@ Perforce Puppet:
 Test layers:
 1. **Unit** (`spec/unit`): client, normalization and providers against
    `webmock` stubs, plus rspec-puppet for the class and type validation.
-2. **Integration** (`spec/acceptance`, run on the VM and in CI): start single-node
-   OpenSearch containers with the security plugin enabled
-   (`opensearchproject/opensearch:2.19.7` and `:3.9.0`, heap 512 MB, one after the
-   other, `OPENSEARCH_INITIAL_ADMIN_PASSWORD`). Then run `bundle exec puppet
-   apply` with example manifests **twice**. The first run must converge; the
-   second must exit 0 with `--detailed-exitcodes`, which proves idempotence.
-   Then check via curl and run `puppet resource` / facter output checks.
-   A helper script `scripts/integration-test.sh` drives this. Beaker/Litmus is
-   not needed because the module runs nothing on the OpenSearch host itself.
-3. **CI**: GitHub Actions with a unit matrix (Ruby 3.2 + OpenVox 8, Ruby 3.4 +
-   OpenVox 9) and an integration matrix (OpenSearch 2.x × 3.x) using service
-   containers.
+2. **Integration** (`spec/integration`, run on the VM and in CI):
+   `scripts/integration-test.sh <opensearch> <openvox>` starts a single-node
+   OpenSearch container with the security plugin enabled
+   (`opensearchproject/opensearch:2.19.7` or `:3.9.0`, heap 512 MB). It then
+   runs `puppet apply` in a container with the **real OpenVox agent package**
+   (`spec/integration/Dockerfile`), so the bundled Ruby, Resource API and
+   Facter versions are tested. Each manifest in `spec/integration/manifests` is
+   applied **twice**: the first run must exit 2 (changes), the second 0 (no
+   changes), which proves idempotence. Then `spec/integration/checks/*.sh`
+   verify the result through the API, including that unmanaged attributes and
+   passwords changed outside Puppet are kept. Beaker/Litmus is not needed.
+3. **CI**: GitHub Actions with a unit matrix (Ruby 3.2 + OpenVox 8, Ruby 4.0 +
+   OpenVox 9) and an integration matrix (OpenSearch 2.19.7 / 3.9.0 × OpenVox
+   8 / 9) that runs the same script.
 
 ## 6. Milestones
 
@@ -180,15 +184,16 @@ Test layers:
    smoke test with curl. *(done)*
 2. **Skeleton**: `metadata.json`, Gemfile, Rakefile, `.rubocop.yml`, `.fixtures.yml`,
    spec helpers, `.github/workflows/ci.yml`, `.gitignore`, README stub. Green CI on
-   an empty module.
+   an empty module. *(done)*
 3. **Core**: `client.rb`, `config.rb`, `normalize.rb`, class `manage_opensearch`.
-   Unit-tested.
-4. **Facts**, with unit tests plus a check against the containers.
+   Unit-tested. *(done)*
+4. **Facts**, with unit tests plus a check against the containers. *(done)*
 5. **Types**, one at a time with unit and integration tests each, from simplest
    to most complex: action_group → role → role_mapping → internal_user →
-   index_template → ism_policy.
+   index_template → ism_policy. *(done)*
 6. **Docs and release**: README with usage, `REFERENCE.md` via puppet-strings,
-   `CHANGELOG.md`, tag `v0.1.0`, `rake build` for the Forge tarball.
+   `CHANGELOG.md` *(done)*; tag `v0.1.0`, `rake build` for the Forge tarball
+   *(open)*.
 
 ## 7. Decisions (2026-11-16)
 
@@ -204,3 +209,37 @@ Test layers:
    local node.
 6. **Push access**: from Windows with a separate deploy key,
    `id_ed25519_manage_opensearch` (not the dcdash key).
+
+## 8. Implementation notes
+
+Findings during implementation that changed or refined the plan:
+
+- **Composite namevars:** `name` and `connection` are both namevars. Titles
+  are `name` (connection `default`) or `connection/name`. `get` must return
+  the title as `connection/name`, because the Resource API checks that the
+  title parses back to both namevars.
+- **Password:** `password` is a property, not a parameter, so Puppet redacts
+  it. Through the `custom_insync` feature, the provider always reports it in
+  sync (decision 3). Updates use `PATCH` without the password, so a password
+  changed outside Puppet stays.
+- **ISM policies:** OpenSearch adds `retry` defaults to every action,
+  `copy_alias: false` to rollovers and timestamps to `ism_template`.
+  `states`, `ism_template` and `error_notification` are therefore compared
+  with `custom_insync` as "manifest is a deep subset of the stored policy"
+  (lists element by element). The downside: removing a single hash key in the
+  manifest is not detected.
+- **Index templates:** settings come back nested under `index` with string
+  values, `composed_of` defaults to `[]`, and `data_stream: {}` comes back
+  with the default `timestamp_field`. All of this is normalized on both sides,
+  so plain equality works.
+- **Facts:** `_cluster/state` doesn't contain node roles; they come from
+  `_nodes?filter_path=nodes.*.roles`. Settings with password/secret/token/
+  credential in the name are removed from `node`. The fact is about 55 KB per
+  node, mostly from `node` (`plugins`, `modules`, `thread_pool`, `jvm`,
+  `aggregations`).
+- **Providers use methods instead of constants**, because Puppet loads
+  provider files twice, which causes "already initialized constant" warnings.
+- **Type files are plain literals** (no helper calls, no `%w[]`), because
+  puppet-strings only documents Resource API types written that way.
+- **Dev VM disk:** OpenSearch blocks index creation above the flood-stage disk
+  watermark. The test container therefore disables disk thresholds.

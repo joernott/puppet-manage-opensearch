@@ -16,10 +16,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # The Ruby versions bundled with the OpenVox agent packages
         include:
           - ruby: '3.2'
             openvox: '~> 8.0'
-          - ruby: '3.4'
+          - ruby: '4.0'
             openvox: '~> 9.0'
     env:
       OPENVOX_GEM_VERSION: ${{ matrix.openvox }}
@@ -32,3 +33,17 @@ jobs:
           bundler-cache: true
       - name: Lint, syntax and unit tests
         run: bundle exec rake test rubocop
+
+  integration:
+    name: Integration (OpenSearch ${{ matrix.opensearch }}, OpenVox ${{ matrix.openvox }})
+    runs-on: ubuntu-24.04
+    needs: unit
+    strategy:
+      fail-fast: false
+      matrix:
+        opensearch: ['2.19.7', '3.9.0']
+        openvox: ['8', '9']
+    steps:
+      - uses: actions/checkout@v5
+      - name: Apply the test manifests against a real cluster
+        run: scripts/integration-test.sh ${{ matrix.opensearch }} ${{ matrix.openvox }}

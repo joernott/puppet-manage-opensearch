@@ -54,6 +54,21 @@ describe PuppetX::ManageOpensearch::Facts do
     )
   end
 
+  it 'reports plugins and modules only with name and version' do
+    component = {
+      'name' => 'opensearch-security', 'version' => '3.9.0.0', 'opensearch_version' => '3.9.0',
+      'description' => 'Provide access control related features for OpenSearch',
+      'classname' => 'org.opensearch.security.OpenSearchSecurityPlugin', 'has_native_controller' => false,
+    }
+    local_node['nodes']['id1']['plugins'] = [component]
+    local_node['nodes']['id1']['modules'] = [component.merge('name' => 'aggs-matrix-stats')]
+    stub_request(:get, api_url('_nodes/_local')).to_return(json(local_node))
+    expect(fact['cluster']['node']).to include(
+      'plugins' => [{ 'name' => 'opensearch-security', 'version' => '3.9.0.0' }],
+      'modules' => [{ 'name' => 'aggs-matrix-stats', 'version' => '3.9.0.0' }],
+    )
+  end
+
   it 'leaves out parts that fail, with a warning' do
     stub_request(:get, api_url('_cluster/health')).to_return(status: 500, body: 'boom')
     allow(Facter).to receive(:warn)

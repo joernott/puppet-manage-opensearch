@@ -134,8 +134,9 @@ opensearch:
     node: {}                    # GET _nodes/_local: this node, plus its 'id'
 ```
 
-Settings whose names contain `password`, `secret`, `token` or `credential` are
-removed from `node`. If the cluster is unreachable, the affected parts are left
+In `node`, `plugins` and `modules` list only `name` and `version` of each
+entry, and settings whose names contain `password`, `secret`, `token` or
+`credential` are removed. The whole fact is about 30 KB per node. If the cluster is unreachable, the affected parts are left
 out with a warning; the Facter run doesn't fail.
 
 ## Reference

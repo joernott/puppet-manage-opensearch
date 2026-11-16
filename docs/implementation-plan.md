@@ -192,8 +192,8 @@ Test layers:
    to most complex: action_group → role → role_mapping → internal_user →
    index_template → ism_policy. *(done)*
 6. **Docs and release**: README with usage, `REFERENCE.md` via puppet-strings,
-   `CHANGELOG.md` *(done)*; tag `v0.1.0`, `rake build` for the Forge tarball
-   *(open)*.
+   `CHANGELOG.md`, tag `v0.1.0` (local only until tested in the target
+   network), `rake build` for the Forge tarball *(done)*.
 
 ## 7. Decisions (2026-11-16)
 
@@ -234,9 +234,9 @@ Findings during implementation that changed or refined the plan:
   so plain equality works.
 - **Facts:** `_cluster/state` doesn't contain node roles; they come from
   `_nodes?filter_path=nodes.*.roles`. Settings with password/secret/token/
-  credential in the name are removed from `node`. The fact is about 55 KB per
-  node, mostly from `node` (`plugins`, `modules`, `thread_pool`, `jvm`,
-  `aggregations`).
+  credential in the name are removed from `node`. The full node info made the
+  fact about 55 KB per node, a third of it from `plugins` and `modules`. These
+  two now list only name and version, which brings the fact to about 30 KB.
 - **Providers use methods instead of constants**, because Puppet loads
   provider files twice, which causes "already initialized constant" warnings.
 - **Type files are plain literals** (no helper calls, no `%w[]`), because

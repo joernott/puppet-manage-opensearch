@@ -5,4 +5,6 @@ for expected in '"cluster_name": "docker-cluster"' '"status": "' '"cluster_manag
   echo "$facts" | grep -q "$expected" || fail "opensearch fact lacks $expected"
 done
 echo "$facts" | grep -qi 'password' && fail 'opensearch fact contains a password key'
+echo "$facts" | grep -q '"classname"' && fail 'plugins/modules in the opensearch fact are not reduced to name and version'
+echo "$facts" | grep -q '"opensearch-security"' || fail 'opensearch fact lacks the security plugin'
 true

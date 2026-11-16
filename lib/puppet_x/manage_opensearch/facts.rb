@@ -52,7 +52,17 @@ module PuppetX
         id, node = (client.get('_nodes/_local')['nodes'] || {}).first
         return nil unless id
 
-        redact(node).merge('id' => id)
+        node = redact(node).merge('id' => id)
+        %w[plugins modules].each do |key|
+          node[key] = brief_components(node[key]) if node[key].is_a?(Array)
+        end
+        node
+      end
+
+      # Plugins and modules only with name and version; the full entries
+      # (descriptions, class names, ...) make up a third of the node info.
+      def brief_components(list)
+        list.map { |component| { 'name' => component['name'], 'version' => component['version'] } }
       end
 
       def redact(value)

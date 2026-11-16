@@ -145,10 +145,16 @@ tracked by git to `~/puppet-manage_opensearch` on the VM and run tests there.
 Pushes to GitHub happen from the Windows repo with a dedicated deploy key
 (`~/.ssh/id_ed25519_manage_opensearch`, set as the repo-local `core.sshCommand`).
 
-Install on the VM: `ruby-full`, `build-essential`, `bundler`. Tooling follows
-Vox Pupuli conventions, not PDK, because PDK is tied to Perforce Puppet:
+Ruby is not installed on the VM. `scripts/ruby.sh` runs every command in an
+official `ruby:<version>` container as the calling user, with gems cached in a
+Docker volume per Ruby version. This needs no sudo and pins the Ruby version
+per OpenVox major: Ruby 3.2 for OpenVox 8, Ruby 3.4 for OpenVox 9.
+
+Tooling follows Vox Pupuli conventions, not PDK, because PDK is tied to
+Perforce Puppet:
 - `Gemfile` with `voxpupuli-test` (rspec-puppet, rubocop, puppet-lint,
-  metadata-json-lint), `openvox` gem (8.x), `webmock`, `puppet-strings`
+  metadata-json-lint, openvox-strings), the `openvox` gem (major selected via
+  `OPENVOX_GEM_VERSION`) and `webmock`
 - `Rakefile` from voxpupuli-test (`rake test`, `rake lint`, `rake rubocop`,
   `rake strings:generate:reference`)
 
@@ -157,20 +163,21 @@ Test layers:
    `webmock` stubs, plus rspec-puppet for the class and type validation.
 2. **Integration** (`spec/acceptance`, run on the VM and in CI): start single-node
    OpenSearch containers with the security plugin enabled
-   (`opensearchproject/opensearch:2.19.x` and `:3.x`, heap 512 MB, one after the
+   (`opensearchproject/opensearch:2.19.7` and `:3.9.0`, heap 512 MB, one after the
    other, `OPENSEARCH_INITIAL_ADMIN_PASSWORD`). Then run `bundle exec puppet
    apply` with example manifests **twice**. The first run must converge; the
    second must exit 0 with `--detailed-exitcodes`, which proves idempotence.
    Then check via curl and run `puppet resource` / facter output checks.
    A helper script `scripts/integration-test.sh` drives this. Beaker/Litmus is
    not needed because the module runs nothing on the OpenSearch host itself.
-3. **CI**: GitHub Actions with a unit job (Ruby 3.2 + newest Ruby, OpenVox 8)
-   and an integration matrix (OpenSearch 2.x × 3.x) using service containers.
+3. **CI**: GitHub Actions with a unit matrix (Ruby 3.2 + OpenVox 8, Ruby 3.4 +
+   OpenVox 9) and an integration matrix (OpenSearch 2.x × 3.x) using service
+   containers.
 
 ## 6. Milestones
 
-1. **Dev environment**: Ruby/bundler on the VM, pull OpenSearch 2 + 3 images,
-   smoke test with curl.
+1. **Dev environment**: Ruby containers on the VM, pull OpenSearch 2 + 3 images,
+   smoke test with curl. *(done)*
 2. **Skeleton**: `metadata.json`, Gemfile, Rakefile, `.rubocop.yml`, `.fixtures.yml`,
    spec helpers, `.github/workflows/ci.yml`, `.gitignore`, README stub. Green CI on
    an empty module.

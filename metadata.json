@@ -1,0 +1,40 @@
+{
+  "name": "joernott-manage_opensearch",
+  "version": "0.1.0",
+  "author": "joernott",
+  "summary": "Manage OpenSearch security objects, index templates and ISM policies through the REST API",
+  "license": "BSD-3-Clause",
+  "source": "https://github.com/joernott/puppet-manage_opensearch",
+  "project_page": "https://github.com/joernott/puppet-manage_opensearch",
+  "issues_url": "https://github.com/joernott/puppet-manage_opensearch/issues",
+  "dependencies": [],
+  "operatingsystem_support": [
+    {
+      "operatingsystem": "Debian",
+      "operatingsystemrelease": ["12", "13"]
+    },
+    {
+      "operatingsystem": "Ubuntu",
+      "operatingsystemrelease": ["22.04", "24.04"]
+    },
+    {
+      "operatingsystem": "RedHat",
+      "operatingsystemrelease": ["8", "9"]
+    },
+    {
+      "operatingsystem": "Rocky",
+      "operatingsystemrelease": ["8", "9"]
+    }
+  ],
+  "requirements": [
+    {
+      "name": "openvox",
+      "version_requirement": ">= 8.0.0 < 10.0.0"
+    },
+    {
+      "name": "puppet",
+      "version_requirement": ">= 8.0.0 < 10.0.0"
+    }
+  ],
+  "tags": ["opensearch", "security", "ism", "index-template", "rest-api"]
+}

@@ -1,0 +1,34 @@
+---
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Unit (Ruby ${{ matrix.ruby }}, OpenVox ${{ matrix.openvox }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ruby: '3.2'
+            openvox: '~> 8.0'
+          - ruby: '3.4'
+            openvox: '~> 9.0'
+    env:
+      OPENVOX_GEM_VERSION: ${{ matrix.openvox }}
+      BUNDLE_WITHOUT: release
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - name: Lint, syntax and unit tests
+        run: bundle exec rake test rubocop

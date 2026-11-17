@@ -11,6 +11,14 @@ Manages objects inside an existing OpenSearch cluster through its REST API:
 | `opensearch_index_template` | composable index templates (`_index_template`) |
 | `opensearch_ism_policy` | Index State Management policies |
 | `opensearch_data_stream` | data streams |
+| `opensearch_index` | single indices: settings, mappings, open or closed |
+| `opensearch_alias` | index aliases |
+| `opensearch_ingest_pipeline` | ingest pipelines |
+| `opensearch_search_pipeline` | search pipelines |
+| `opensearch_stored_script` | stored scripts and search templates |
+| `opensearch_tenant` | OpenSearch Dashboards tenants |
+| `opensearch_tenancy_config` | the multi-tenancy configuration (once per cluster) |
+| `opensearch_allowlist` | the allow list of the security plugin (once per cluster) |
 
 It also provides the structured fact `opensearch`. Installing and configuring
 OpenSearch itself is left to other modules.
@@ -110,8 +118,15 @@ More examples with explanations are in [EXAMPLES.md](EXAMPLES.md).
   match in length and order. Removing a single key from a hash in the manifest
   is therefore not detected. Updating a policy does not change indices already
   managed by an older version of it.
-* **Deleting a data stream** (`ensure => absent`, or purging) deletes all its
-  backing indices and data.
+* **Deleting a data stream or an index** (`ensure => absent`, or purging)
+  deletes its data. Indices and aliases starting with a dot are not listed
+  or purged.
+* **Settings that exist once per cluster** (`opensearch_tenancy_config`,
+  `opensearch_allowlist`) have the connection name as their title, e.g.
+  `opensearch_tenancy_config { 'default': ... }`.
+* **The allow list needs the admin certificate.** Add a connection with
+  `client_cert` and `client_key` of the admin certificate and use its name
+  as the title; with a user and password, OpenSearch denies access.
 * **Several clusters:** further connections can be added with the class
   parameter `connections`. Address resources in them with titles like
   `'other/logs_reader'` or the `connection` parameter. Listing and purging

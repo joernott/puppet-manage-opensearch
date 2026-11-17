@@ -142,3 +142,161 @@ Things to know:
 * **`ensure => absent` on the data stream deletes all its data.** To remove
   everything, delete the data stream before the index template:
   `opensearch_data_stream { 'metrics': ensure => absent, before => Opensearch_index_template['metrics'] }`.
+
+## Single indices and aliases
+
+Most indices should come from index templates and data streams. For single,
+long-lived indices, such as a lookup index, use `opensearch_index`. Aliases
+let applications use a stable name while the index behind it changes.
+
+```puppet
+opensearch_index { 'customers-v2':
+  settings => { 'number_of_shards' => 1, 'number_of_replicas' => 1, 'refresh_interval' => '5s' },
+  mappings => {
+    'dynamic'    => 'strict',
+    'properties' => {
+      'name'    => { 'type' => 'text' },
+      'email'   => { 'type' => 'keyword' },
+      'country' => { 'type' => 'keyword' },
+    },
+  },
+}
+
+opensearch_alias { 'customers':
+  indices     => ['customers-v2'],
+  write_index => 'customers-v2',
+}
+
+opensearch_alias { 'customers-eu':
+  indices => ['customers-v2'],
+  filter  => { 'terms' => { 'country' => ['de', 'fr', 'nl'] } },
+}
+```
+
+* Aliases automatically depend on the indices they name.
+* To switch to a new index, change `indices` and `write_index`. Puppet
+  moves the alias in one atomic request, so readers never see no index or
+  both.
+* `settings` and `mappings` only compare what you specify. New mapping
+  fields are added; the type of an existing field can't be changed.
+* Static settings such as `codec` can only be changed while the index is
+  closed: set `state => 'closed'` together with the setting. Puppet closes
+  the index first, then changes the setting.
+* `ensure => absent` deletes the index and its data.
+
+## Ingest and search pipelines
+
+An ingest pipeline that the index template of the data stream `metrics`
+(see above) uses by default, and a search pipeline that hides internal
+documents:
+
+```puppet
+opensearch_ingest_pipeline { 'metrics_enrich':
+  description => 'Adds the environment and normalizes the level',
+  processors  => [
+    { 'set' => { 'field' => 'environment', 'value' => 'production' } },
+    { 'lowercase' => { 'field' => 'level', 'ignore_missing' => true } },
+  ],
+  on_failure  => [
+    { 'set' => { 'field' => 'ingest_error', 'value' => '{{ _ingest.on_failure_message }}' } },
+  ],
+}
+
+opensearch_index_template { 'metrics':
+  index_patterns => ['metrics'],
+  data_stream    => {},
+  priority       => 100,
+  template       => {
+    'settings' => { 'default_pipeline' => 'metrics_enrich' },
+  },
+  require        => Opensearch_ingest_pipeline['metrics_enrich'],
+}
+
+opensearch_search_pipeline { 'public_only':
+  description        => 'Hides internal documents',
+  request_processors => [
+    { 'filter_query' => { 'query' => { 'bool' => { 'must_not' => { 'term' => { 'internal' => true } } } } } },
+  ],
+}
+```
+
+* Processors are compared in their order; a different order is a change.
+* Searches use the search pipeline with `?search_pipeline=public_only`, or
+  for all searches on an index with the index setting
+  `index.search.default_pipeline`.
+* `_meta` is not supported for ingest pipelines: OpenSearch 3 rejects it.
+
+## Stored scripts and search templates
+
+```puppet
+opensearch_stored_script { 'boost_by_popularity':
+  lang    => 'painless',
+  source  => "_score * Math.log(2 + doc['popularity'].value)",
+  context => 'score',
+}
+
+opensearch_stored_script { 'find_by_host':
+  lang   => 'mustache',
+  source => {
+    'query' => { 'term' => { 'host.name' => '{{host}}' } },
+    'size'  => '{{size}}',
+  },
+}
+```
+
+* With `context`, OpenSearch compiles the script when storing it and rejects
+  invalid scripts. Without it, errors only show when the script is used.
+* A search template can be a Hash (as above) or JSON text; both are compared
+  as data. Use it with
+  `GET metrics/_search/template {"id": "find_by_host", "params": {"host": "web1", "size": 10}}`.
+
+## Tenants, multi-tenancy and the allow list
+
+Tenants for OpenSearch Dashboards, the multi-tenancy settings, and an allow
+list that limits the REST API. The allow list needs a connection with the
+admin certificate; here the connection `default` uses it.
+
+```puppet
+class { 'manage_opensearch':
+  client_cert => '/etc/opensearch/admin.pem',
+  client_key  => '/etc/opensearch/admin-key.pem',
+  ca_file     => '/etc/opensearch/root-ca.pem',
+}
+
+opensearch_tenant { ['operations', 'development']:
+  description => 'Team tenant',
+}
+
+opensearch_tenancy_config { 'default':
+  multitenancy_enabled   => true,
+  private_tenant_enabled => false,
+  default_tenant         => 'operations',
+}
+
+opensearch_role { 'operations_dashboards':
+  tenant_permissions => [
+    { 'tenant_patterns' => ['operations'], 'allowed_actions' => ['kibana_all_write'] },
+  ],
+}
+
+opensearch_allowlist { 'default':
+  enabled  => true,
+  requests => {
+    '/_cluster/health' => ['GET'],
+    '/_cat/indices'    => ['GET'],
+    '/metrics/_bulk'   => ['POST'],
+  },
+}
+```
+
+* The title of `opensearch_tenancy_config` and `opensearch_allowlist` is the
+  connection name: these settings exist once per cluster.
+* `opensearch_tenancy_config` automatically depends on the tenants it names.
+* `preferred_tenants` exists only in OpenSearch 3; OpenSearch 2 rejects it.
+* **Careful with `enabled => true`:** every user except the super admin
+  (admin certificate) can then only call the listed endpoints, including
+  users of applications and of OpenSearch Dashboards. List everything they
+  need before enabling it. If Puppet connects with a user and password,
+  add a second connection with the admin certificate for the allow list
+  (`opensearch_allowlist { 'superadmin': ... }`); the user of the
+  `default` connection is then restricted too.

@@ -16,15 +16,25 @@ module PuppetX
     class Provider < Puppet::ResourceApi::SimpleProvider
       # Fetches the resources of the connections that the catalog uses, or of
       # all connections when listing (`puppet resource`, purging).
+      #
+      # Types with the feature simple_get_filter get the names of the wanted
+      # resources (an empty list when listing) and can fetch only those by
+      # overriding `fetch`.
       def get(context, names = nil)
-        @current = {}
-        connections = if names.nil?
+        listing = names.nil? || names.empty?
+        @current = {} if listing || @current.nil?
+        connections = if listing
                         Config.connections.keys
                       else
-                        names.map { |n| (n.is_a?(Hash) && n[:connection]) || 'default' }.uniq
+                        names.map { |n| connection_of(n) }.uniq
                       end
         connections.flat_map do |connection|
-          fetch_all(context, client(connection)).map do |name, raw, attributes|
+          wanted = if listing
+                     nil
+                   else
+                     names.select { |n| connection_of(n) == connection }.map { |n| n.is_a?(Hash) ? n[:name] : n }
+                   end
+          fetch(context, client(connection), wanted).map do |name, raw, attributes|
             @current[[connection, name]] = raw
             # The Resource API checks that the title parses back to both
             # namevars, so it always contains the connection.
@@ -49,7 +59,17 @@ module PuppetX
         result
       end
 
+      # Fetches the resources of one connection: all of them, or only `names`
+      # if given. The default fetches all and lets the Resource API pick.
+      def fetch(context, client, _names)
+        fetch_all(context, client)
+      end
+
       private
+
+      def connection_of(name)
+        (name.is_a?(Hash) && name[:connection]) || 'default'
+      end
 
       def client(connection)
         @clients ||= {}

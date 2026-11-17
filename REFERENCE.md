@@ -11,12 +11,20 @@
 ### Resource types
 
 * [`opensearch_action_group`](#opensearch_action_group): Manages an action group of the OpenSearch security plugin.
+* [`opensearch_alias`](#opensearch_alias): Manages an index alias.
+* [`opensearch_allowlist`](#opensearch_allowlist): Manages the allow list of the security plugin.
 * [`opensearch_data_stream`](#opensearch_data_stream): Manages a data stream.
+* [`opensearch_index`](#opensearch_index): Manages a single index: its existence, settings, mappings and
 * [`opensearch_index_template`](#opensearch_index_template): Manages a composable index template (`_index_template`).
+* [`opensearch_ingest_pipeline`](#opensearch_ingest_pipeline): Manages an ingest pipeline.
 * [`opensearch_internal_user`](#opensearch_internal_user): Manages a user of the OpenSearch security plugin's internal user database.
 * [`opensearch_ism_policy`](#opensearch_ism_policy): Manages an Index State Management (ISM) policy.
 * [`opensearch_role`](#opensearch_role): Manages a role of the OpenSearch security plugin.
 * [`opensearch_role_mapping`](#opensearch_role_mapping): Maps users, backend roles and hosts to a role of the OpenSearch security plugin.
+* [`opensearch_search_pipeline`](#opensearch_search_pipeline): Manages a search pipeline.
+* [`opensearch_stored_script`](#opensearch_stored_script): Manages a stored script or search template.
+* [`opensearch_tenancy_config`](#opensearch_tenancy_config): Manages the multi-tenancy configuration of OpenSearch Dashboards.
+* [`opensearch_tenant`](#opensearch_tenant): Manages an OpenSearch Dashboards tenant of the security plugin.
 
 ### Functions
 
@@ -223,6 +231,177 @@ Data type: `String[1]`
 
 The name of the action group.
 
+### <a name="opensearch_alias"></a>`opensearch_alias`
+
+Changes are made in one atomic `_aliases` request: an alias never points
+to no index or to both the old and the new one. `filter`, the routing
+values and `is_hidden` apply to all indices of the alias.
+
+Don't manage aliases that ISM rolls over (`rollover_alias`): ISM moves
+the write index and Puppet would move it back. Aliases whose name starts
+with a dot are not listed. The title is either the alias name or
+`connection/name`.
+
+#### Examples
+
+#####
+
+```puppet
+opensearch_alias { 'orders':
+  indices     => ['orders-2025', 'orders-2026'],
+  write_index => 'orders-2026',
+}
+
+opensearch_alias { 'orders-eu':
+  indices => ['orders-2025', 'orders-2026'],
+  filter  => { 'term' => { 'region' => 'eu' } },
+}
+```
+
+#### Properties
+
+The following properties are available in the `opensearch_alias` type.
+
+##### `ensure`
+
+Data type: `Enum[present, absent]`
+
+Whether the alias should exist.
+
+Default value: `present`
+
+##### `filter`
+
+Data type: `Optional[Hash]`
+
+A query that limits the documents visible through the alias.
+
+##### `index_routing`
+
+Data type: `Optional[String[1]]`
+
+Routing value for writes through the alias.
+
+##### `indices`
+
+Data type: `Optional[Array[Pattern[/\A[^*,]+\z/], 1]]`
+_*this data type contains a regex that may not be accurately reflected in generated documentation_
+
+The indices the alias points to; names, no wildcards. The order does not matter. Required when creating the alias.
+
+##### `is_hidden`
+
+Data type: `Optional[Boolean]`
+
+Whether the alias is left out of wildcard expressions.
+
+##### `search_routing`
+
+Data type: `Optional[String[1]]`
+
+Routing values (comma-separated) for searches through the alias.
+
+##### `write_index`
+
+Data type: `Optional[String[1]]`
+
+The index that receives writes to the alias. Must be one of `indices`.
+
+#### Parameters
+
+The following parameters are available in the `opensearch_alias` type.
+
+* [`connection`](#-opensearch_alias--connection)
+* [`name`](#-opensearch_alias--name)
+
+##### <a name="-opensearch_alias--connection"></a>`connection`
+
+namevar
+
+Data type: `Pattern[/\A[a-z0-9_]+\z/]`
+_*this data type contains a regex that may not be accurately reflected in generated documentation_
+
+The connection from the class manage_opensearch to use.
+
+Default value: `default`
+
+##### <a name="-opensearch_alias--name"></a>`name`
+
+namevar
+
+Data type: `String[1]`
+
+The name of the alias.
+
+### <a name="opensearch_allowlist"></a>`opensearch_allowlist`
+
+When the allow list is enabled, users other than the super admin can only
+call the listed endpoints with the listed methods.
+
+The allow list exists once per cluster, so the title is the name of a
+connection from the class `manage_opensearch`. **The connection must use
+the admin certificate** (`client_cert` and `client_key`); with a user and
+password, OpenSearch denies access even for `admin`. Listing
+(`puppet resource opensearch_allowlist`) skips connections without access.
+
+#### Examples
+
+#####
+
+```puppet
+class { 'manage_opensearch':
+  username    => 'admin',
+  password    => Sensitive('secret'),
+  connections => {
+    'superadmin' => {
+      'url'         => "https://${facts['networking']['fqdn']}:9200",
+      'client_cert' => '/etc/opensearch/admin.pem',
+      'client_key'  => '/etc/opensearch/admin-key.pem',
+      'ca_file'     => '/etc/opensearch/root-ca.pem',
+    },
+  },
+}
+
+opensearch_allowlist { 'superadmin':
+  enabled  => true,
+  requests => {
+    '/_cluster/health' => ['GET'],
+    '/_cat/nodes'      => ['GET'],
+  },
+}
+```
+
+#### Properties
+
+The following properties are available in the `opensearch_allowlist` type.
+
+##### `enabled`
+
+Data type: `Optional[Boolean]`
+
+Whether the allow list is enforced.
+
+##### `requests`
+
+Data type: `Optional[Hash[String[1], Array[Enum['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD']]]]`
+
+Allowed requests: endpoint path => HTTP methods. The order of the methods does not matter.
+
+#### Parameters
+
+The following parameters are available in the `opensearch_allowlist` type.
+
+* [`connection`](#-opensearch_allowlist--connection)
+
+##### <a name="-opensearch_allowlist--connection"></a>`connection`
+
+namevar
+
+Data type: `Pattern[/\A[a-z0-9_]+\z/]`
+_*this data type contains a regex that may not be accurately reflected in generated documentation_
+
+The connection from the class manage_opensearch to use. It must use the admin certificate.
+
 ### <a name="opensearch_data_stream"></a>`opensearch_data_stream`
 
 Creating a data stream needs an index template with `data_stream` whose
@@ -300,6 +479,103 @@ namevar
 Data type: `String[1]`
 
 The name of the data stream.
+
+### <a name="opensearch_index"></a>`opensearch_index`
+
+whether it is open.
+
+Prefer index templates and data streams for indices that are created
+continuously; use this type for single, long-lived indices.
+
+* `settings` and `mappings` are in sync when everything they contain is
+  present in the index with the same value. Settings may be nested or
+  dotted, with or without the `index.` prefix.
+* Changed settings are updated in place. Static settings (e.g. `codec`)
+  can only be changed on a closed index: set `state => closed`, and the
+  index is closed before the settings are changed. `number_of_shards`
+  can never be changed.
+* New mapping fields are added; the type of an existing field cannot be
+  changed (OpenSearch rejects it).
+* Aliases are managed with `opensearch_alias`.
+* **`ensure => absent` deletes the index and its data**, and so does
+  purging. Indices starting with a dot (system indices, backing indices
+  of data streams) and hidden indices are not listed or purged.
+
+The title is either the index name or `connection/name`.
+
+#### Examples
+
+#####
+
+```puppet
+opensearch_index { 'customers':
+  settings => { 'number_of_shards' => 1, 'number_of_replicas' => 1, 'refresh_interval' => '5s' },
+  mappings => {
+    'dynamic'    => 'strict',
+    'properties' => {
+      'name'  => { 'type' => 'text' },
+      'email' => { 'type' => 'keyword' },
+    },
+  },
+}
+```
+
+#### Properties
+
+The following properties are available in the `opensearch_index` type.
+
+##### `ensure`
+
+Data type: `Enum[present, absent]`
+
+Whether the index should exist. `absent` deletes its data.
+
+Default value: `present`
+
+##### `mappings`
+
+Data type: `Optional[Hash]`
+
+Mappings (`properties`, `dynamic`, ...). Only the mappings given here are compared.
+
+##### `settings`
+
+Data type: `Optional[Hash]`
+
+Index settings. Only the settings given here are compared.
+
+##### `state`
+
+Data type: `Optional[Enum[open, closed]]`
+
+Whether the index is open or closed. A closed index cannot be read or written.
+
+#### Parameters
+
+The following parameters are available in the `opensearch_index` type.
+
+* [`connection`](#-opensearch_index--connection)
+* [`name`](#-opensearch_index--name)
+
+##### <a name="-opensearch_index--connection"></a>`connection`
+
+namevar
+
+Data type: `Pattern[/\A[a-z0-9_]+\z/]`
+_*this data type contains a regex that may not be accurately reflected in generated documentation_
+
+The connection from the class manage_opensearch to use.
+
+Default value: `default`
+
+##### <a name="-opensearch_index--name"></a>`name`
+
+namevar
+
+Data type: `Pattern[/\A[^*,"<>|\/\\\\? #A-Z]+\z/]`
+_*this data type contains a regex that may not be accurately reflected in generated documentation_
+
+The name of the index: lowercase, without spaces and the characters * , " < > | / \\ ? #.
 
 ### <a name="opensearch_index_template"></a>`opensearch_index_template`
 
@@ -404,6 +680,91 @@ namevar
 Data type: `String[1]`
 
 The name of the index template.
+
+### <a name="opensearch_ingest_pipeline"></a>`opensearch_ingest_pipeline`
+
+Processors are compared exactly, in their order. Attributes that are not
+set are kept as they are in the cluster. The title is either the ID or
+`connection/ID`.
+
+#### Examples
+
+#####
+
+```puppet
+opensearch_ingest_pipeline { 'metrics_enrich':
+  description => 'Adds the environment and parses the level',
+  processors  => [
+    { 'set' => { 'field' => 'environment', 'value' => 'production' } },
+    { 'lowercase' => { 'field' => 'level', 'ignore_missing' => true } },
+  ],
+  on_failure  => [
+    { 'set' => { 'field' => 'ingest_error', 'value' => '{{ _ingest.on_failure_message }}' } },
+  ],
+}
+```
+
+#### Properties
+
+The following properties are available in the `opensearch_ingest_pipeline` type.
+
+##### `description`
+
+Data type: `Optional[String]`
+
+A description of the pipeline.
+
+##### `ensure`
+
+Data type: `Enum[present, absent]`
+
+Whether the pipeline should exist.
+
+Default value: `present`
+
+##### `on_failure`
+
+Data type: `Optional[Array[Hash[String[1], Hash]]]`
+
+Processors that run when a processor fails.
+
+##### `processors`
+
+Data type: `Optional[Array[Hash[String[1], Hash], 1]]`
+
+The processors, in the order they run. Required when creating the pipeline.
+
+##### `version`
+
+Data type: `Optional[Integer[0]]`
+
+A version number for your own bookkeeping.
+
+#### Parameters
+
+The following parameters are available in the `opensearch_ingest_pipeline` type.
+
+* [`connection`](#-opensearch_ingest_pipeline--connection)
+* [`name`](#-opensearch_ingest_pipeline--name)
+
+##### <a name="-opensearch_ingest_pipeline--connection"></a>`connection`
+
+namevar
+
+Data type: `Pattern[/\A[a-z0-9_]+\z/]`
+_*this data type contains a regex that may not be accurately reflected in generated documentation_
+
+The connection from the class manage_opensearch to use.
+
+Default value: `default`
+
+##### <a name="-opensearch_ingest_pipeline--name"></a>`name`
+
+namevar
+
+Data type: `String[1]`
+
+The ID of the pipeline.
 
 ### <a name="opensearch_internal_user"></a>`opensearch_internal_user`
 
@@ -783,6 +1144,310 @@ namevar
 Data type: `String[1]`
 
 The name of the role mapping.
+
+### <a name="opensearch_search_pipeline"></a>`opensearch_search_pipeline`
+
+Processors are compared exactly, in their order. Attributes that are not
+set are kept as they are in the cluster. The title is either the ID or
+`connection/ID`.
+
+#### Examples
+
+#####
+
+```puppet
+opensearch_search_pipeline { 'public_only':
+  description        => 'Only returns public documents',
+  request_processors => [
+    { 'filter_query' => { 'query' => { 'term' => { 'visibility' => 'public' } } } },
+  ],
+}
+```
+
+#### Properties
+
+The following properties are available in the `opensearch_search_pipeline` type.
+
+##### `description`
+
+Data type: `Optional[String]`
+
+A description of the pipeline.
+
+##### `ensure`
+
+Data type: `Enum[present, absent]`
+
+Whether the pipeline should exist.
+
+Default value: `present`
+
+##### `phase_results_processors`
+
+Data type: `Optional[Array[Hash[String[1], Hash]]]`
+
+Processors that run between the query and fetch phases, e.g. `normalization-processor` for hybrid search.
+
+##### `request_processors`
+
+Data type: `Optional[Array[Hash[String[1], Hash]]]`
+
+Processors that change the search request, in the order they run.
+
+##### `response_processors`
+
+Data type: `Optional[Array[Hash[String[1], Hash]]]`
+
+Processors that change the search response, in the order they run.
+
+##### `version`
+
+Data type: `Optional[Integer[0]]`
+
+A version number for your own bookkeeping.
+
+#### Parameters
+
+The following parameters are available in the `opensearch_search_pipeline` type.
+
+* [`connection`](#-opensearch_search_pipeline--connection)
+* [`name`](#-opensearch_search_pipeline--name)
+
+##### <a name="-opensearch_search_pipeline--connection"></a>`connection`
+
+namevar
+
+Data type: `Pattern[/\A[a-z0-9_]+\z/]`
+_*this data type contains a regex that may not be accurately reflected in generated documentation_
+
+The connection from the class manage_opensearch to use.
+
+Default value: `default`
+
+##### <a name="-opensearch_search_pipeline--name"></a>`name`
+
+namevar
+
+Data type: `String[1]`
+
+The ID of the pipeline.
+
+### <a name="opensearch_stored_script"></a>`opensearch_stored_script`
+
+A search template (`lang => 'mustache'`) may be given as a Hash; it is
+compared with the stored template as data, not as text. Attributes that
+are not set are kept as they are in the cluster. The title is either the
+ID or `connection/ID`.
+
+#### Examples
+
+##### A Painless script, compiled for the score context when stored
+
+```puppet
+opensearch_stored_script { 'boost_by_popularity':
+  lang    => 'painless',
+  source  => "_score * Math.log(2 + doc['popularity'].value)",
+  context => 'score',
+}
+```
+
+##### A search template
+
+```puppet
+opensearch_stored_script { 'find_by_host':
+  lang   => 'mustache',
+  source => {
+    'query' => { 'term' => { 'host.name' => '{{host}}' } },
+    'size'  => '{{size}}',
+  },
+}
+```
+
+#### Properties
+
+The following properties are available in the `opensearch_stored_script` type.
+
+##### `ensure`
+
+Data type: `Enum[present, absent]`
+
+Whether the script should exist.
+
+Default value: `present`
+
+##### `lang`
+
+Data type: `Optional[String[1]]`
+
+The script language, e.g. `painless` or `mustache`. Required when creating the script.
+
+##### `source`
+
+Data type: `Optional[Variant[String[1], Hash]]`
+
+The script. For `mustache`, a Hash with the search request or a JSON string. Required when creating the script.
+
+#### Parameters
+
+The following parameters are available in the `opensearch_stored_script` type.
+
+* [`connection`](#-opensearch_stored_script--connection)
+* [`context`](#-opensearch_stored_script--context)
+* [`name`](#-opensearch_stored_script--name)
+
+##### <a name="-opensearch_stored_script--connection"></a>`connection`
+
+namevar
+
+Data type: `Pattern[/\A[a-z0-9_]+\z/]`
+_*this data type contains a regex that may not be accurately reflected in generated documentation_
+
+The connection from the class manage_opensearch to use.
+
+Default value: `default`
+
+##### <a name="-opensearch_stored_script--context"></a>`context`
+
+Data type: `Optional[String[1]]`
+
+A script context such as `score` or `filter`. If set, OpenSearch compiles the script when storing it and rejects invalid
+scripts. Not stored, so not compared.
+
+##### <a name="-opensearch_stored_script--name"></a>`name`
+
+namevar
+
+Data type: `String[1]`
+
+The ID of the script.
+
+### <a name="opensearch_tenancy_config"></a>`opensearch_tenancy_config`
+
+The configuration exists once per cluster, so the title is the name of a
+connection from the class `manage_opensearch`. It cannot be removed.
+Attributes that are not set are kept as they are in the cluster.
+
+#### Examples
+
+#####
+
+```puppet
+opensearch_tenancy_config { 'default':
+  multitenancy_enabled   => true,
+  private_tenant_enabled => false,
+  default_tenant         => 'operations',
+  preferred_tenants      => ['operations', 'global_tenant'],
+}
+```
+
+#### Properties
+
+The following properties are available in the `opensearch_tenancy_config` type.
+
+##### `default_tenant`
+
+Data type: `Optional[String[1]]`
+
+The tenant OpenSearch Dashboards opens by default. It must exist.
+
+##### `multitenancy_enabled`
+
+Data type: `Optional[Boolean]`
+
+Whether multi-tenancy is enabled in OpenSearch Dashboards.
+
+##### `preferred_tenants`
+
+Data type: `Optional[Array[String[1]]]`
+
+Tenants listed first in the tenant selector, in this order. OpenSearch 3 and later.
+
+##### `private_tenant_enabled`
+
+Data type: `Optional[Boolean]`
+
+Whether users have a private tenant.
+
+##### `sign_in_options`
+
+Data type: `Optional[Array[Enum['BASIC', 'SAML', 'OPENID', 'ANONYMOUS']]]`
+
+Sign-in options shown by OpenSearch Dashboards. Each needs a matching authentication domain. The order does not matter.
+
+#### Parameters
+
+The following parameters are available in the `opensearch_tenancy_config` type.
+
+* [`connection`](#-opensearch_tenancy_config--connection)
+
+##### <a name="-opensearch_tenancy_config--connection"></a>`connection`
+
+namevar
+
+Data type: `Pattern[/\A[a-z0-9_]+\z/]`
+_*this data type contains a regex that may not be accurately reflected in generated documentation_
+
+The connection from the class manage_opensearch to use.
+
+### <a name="opensearch_tenant"></a>`opensearch_tenant`
+
+Built-in (reserved, static or hidden) tenants such as `global_tenant` are
+not listed and cannot be changed. The title is either the name or
+`connection/name`.
+
+#### Examples
+
+#####
+
+```puppet
+opensearch_tenant { 'operations':
+  description => 'Dashboards of the operations team',
+}
+```
+
+#### Properties
+
+The following properties are available in the `opensearch_tenant` type.
+
+##### `description`
+
+Data type: `Optional[String]`
+
+A description of the tenant.
+
+##### `ensure`
+
+Data type: `Enum[present, absent]`
+
+Whether the tenant should exist.
+
+Default value: `present`
+
+#### Parameters
+
+The following parameters are available in the `opensearch_tenant` type.
+
+* [`connection`](#-opensearch_tenant--connection)
+* [`name`](#-opensearch_tenant--name)
+
+##### <a name="-opensearch_tenant--connection"></a>`connection`
+
+namevar
+
+Data type: `Pattern[/\A[a-z0-9_]+\z/]`
+_*this data type contains a regex that may not be accurately reflected in generated documentation_
+
+The connection from the class manage_opensearch to use.
+
+Default value: `default`
+
+##### <a name="-opensearch_tenant--name"></a>`name`
+
+namevar
+
+Data type: `String[1]`
+
+The name of the tenant.
 
 ## Functions
 

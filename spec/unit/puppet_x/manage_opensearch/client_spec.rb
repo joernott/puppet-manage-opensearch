@@ -42,6 +42,13 @@ describe PuppetX::ManageOpensearch::Client do
     expect { client.put('u', {}) }.to raise_error(PuppetX::ManageOpensearch::ApiError, %r{HTTP 400: Weak password})
   end
 
+  it 'names the fields the security plugin rejects' do
+    stub_request(:put, 'https://os.example.com:9200/c').to_return(
+      status: 400, body: '{"status":"error","reason":"Invalid configuration","invalid_keys":{"keys":"preferred_tenants"}}',
+    )
+    expect { client.put('c', {}) }.to raise_error(PuppetX::ManageOpensearch::ApiError, %r{Invalid configuration \(invalid keys: preferred_tenants\)})
+  end
+
   it 'returns nil from get_if_exists on 404' do
     stub_request(:get, 'https://os.example.com:9200/missing').to_return(status: 404, body: '{}')
     expect(client.get_if_exists('missing')).to be_nil

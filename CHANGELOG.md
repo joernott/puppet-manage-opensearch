@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0 (2026-11-17)
+
+* New types `opensearch_index` (single indices: settings, mappings, open or
+  closed) and `opensearch_alias` (atomic alias changes).
+* New types `opensearch_ingest_pipeline`, `opensearch_search_pipeline` and
+  `opensearch_stored_script` (scripts and search templates).
+* New types `opensearch_tenant`, `opensearch_tenancy_config` and
+  `opensearch_allowlist` (needs a connection with the admin certificate).
+* Error messages of the security API name the rejected fields.
+
 ## 0.1.0 (2026-11-16)
 
 First version.

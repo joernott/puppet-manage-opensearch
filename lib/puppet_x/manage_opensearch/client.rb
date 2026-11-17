@@ -24,11 +24,15 @@ module PuppetX
         return body.to_s unless data.is_a?(Hash)
 
         error = data['error']
-        if error.is_a?(Hash)
-          [error['type'], error['reason']].compact.join(': ')
-        else
-          (error || data['reason'] || data['message'] || data['status'] || body).to_s
+        return [error['type'], error['reason']].compact.join(': ') if error.is_a?(Hash)
+
+        # The security plugin names the offending fields separately.
+        details = %w[invalid_keys missing_mandatory_keys].filter_map do |key|
+          keys = data.dig(key, 'keys')
+          "#{key.tr('_', ' ')}: #{keys}" if keys
         end
+        message = (error || data['reason'] || data['message'] || data['status'] || body).to_s
+        details.empty? ? message : "#{message} (#{details.join('; ')})"
       rescue JSON::ParserError
         body.to_s.strip
       end

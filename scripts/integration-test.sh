@@ -52,11 +52,20 @@ until [ "$(curl -sk -o /dev/null -w '%{http_code}' -u "admin:$ADMIN_PASSWORD" ht
 done
 echo "ready"
 
+# The demo admin certificate, for the connection "superadmin" (allow list).
+CERT_DIR=$(mktemp -d)
+trap 'cleanup; rm -rf "$CERT_DIR"' EXIT INT TERM
+docker cp "$OS_CONTAINER:/usr/share/opensearch/config/kirk.pem" "$CERT_DIR/admin.pem"
+docker cp "$OS_CONTAINER:/usr/share/opensearch/config/kirk-key.pem" "$CERT_DIR/admin-key.pem"
+chmod 0644 "$CERT_DIR"/*.pem
+
 log "Running manifests"
 docker run --rm --network host \
   -e ADMIN_PASSWORD \
   -e "FACTER_opensearch_admin_password=$ADMIN_PASSWORD" \
+  -e "FACTER_opensearch_major=${OPENSEARCH_VERSION%%.*}" \
   -v "$MODULE_DIR:/etc/puppetlabs/code/environments/production/modules/manage_opensearch:ro" \
+  -v "$CERT_DIR:/certs:ro" \
   "$AGENT_IMAGE" sh /etc/puppetlabs/code/environments/production/modules/manage_opensearch/spec/integration/run.sh
 
 log "Integration test passed (OpenSearch $OPENSEARCH_VERSION, OpenVox $OPENVOX)"
